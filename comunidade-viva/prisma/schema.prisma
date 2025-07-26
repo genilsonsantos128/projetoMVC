@@ -1,0 +1,249 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  phone       String?
+  bio         String?
+  ministry    String?
+  avatar      String?
+  role        Role     @default(MEMBER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  prayerRequests    PrayerRequest[]
+  prayerResponses   PrayerResponse[]
+  forumPosts        ForumPost[]
+  forumComments     ForumComment[]
+  groupMemberships  GroupMember[]
+  ownedGroups       Group[]         @relation("GroupOwner")
+  notifications     Notification[]
+  reports           Report[]        @relation("ReportedBy")
+  reportedContent   Report[]        @relation("ReportedUser")
+
+  @@map("users")
+}
+
+model PrayerRequest {
+  id          String            @id @default(cuid())
+  title       String
+  content     String
+  isAnonymous Boolean           @default(false)
+  isUrgent    Boolean           @default(false)
+  status      PrayerStatus      @default(ACTIVE)
+  category    PrayerCategory    @default(GENERAL)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  // Relations
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  responses PrayerResponse[]
+
+  @@map("prayer_requests")
+}
+
+model PrayerResponse {
+  id        String            @id @default(cuid())
+  type      PrayerResponseType
+  comment   String?
+  createdAt DateTime          @default(now())
+
+  // Relations
+  userId          String
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  prayerRequestId String
+  prayerRequest   PrayerRequest @relation(fields: [prayerRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, prayerRequestId, type])
+  @@map("prayer_responses")
+}
+
+model Forum {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  icon        String?
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  posts ForumPost[]
+
+  @@map("forums")
+}
+
+model ForumPost {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  isPinned  Boolean  @default(false)
+  isLocked  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId   String
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forumId  String
+  forum    Forum          @relation(fields: [forumId], references: [id], onDelete: Cascade)
+  comments ForumComment[]
+
+  @@map("forum_posts")
+}
+
+model ForumComment {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  forumPostId String
+  forumPost   ForumPost @relation(fields: [forumPostId], references: [id], onDelete: Cascade)
+
+  @@map("forum_comments")
+}
+
+model Group {
+  id          String      @id @default(cuid())
+  name        String
+  description String
+  image       String?
+  isPrivate   Boolean     @default(false)
+  maxMembers  Int?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  ownerId String
+  owner   User          @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  members GroupMember[]
+
+  @@map("groups")
+}
+
+model GroupMember {
+  id        String          @id @default(cuid())
+  role      GroupRole       @default(MEMBER)
+  status    MembershipStatus @default(ACTIVE)
+  joinedAt  DateTime        @default(now())
+
+  // Relations
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, groupId])
+  @@map("group_members")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  title     String
+  content   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model Report {
+  id          String      @id @default(cuid())
+  reason      String
+  description String?
+  status      ReportStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  reportedById String
+  reportedBy   User   @relation("ReportedBy", fields: [reportedById], references: [id], onDelete: Cascade)
+  reportedUserId String?
+  reportedUser User?  @relation("ReportedUser", fields: [reportedUserId], references: [id], onDelete: SetNull)
+
+  @@map("reports")
+}
+
+// Enums
+enum Role {
+  ADMIN
+  MODERATOR
+  LEADER
+  MEMBER
+}
+
+enum PrayerStatus {
+  ACTIVE
+  ANSWERED
+  CLOSED
+}
+
+enum PrayerCategory {
+  GENERAL
+  HEALTH
+  FAMILY
+  WORK
+  SPIRITUAL
+  FINANCIAL
+  RELATIONSHIP
+  URGENT
+}
+
+enum PrayerResponseType {
+  PRAYING
+  AMEN
+  HEART
+}
+
+enum GroupRole {
+  ADMIN
+  MODERATOR
+  MEMBER
+}
+
+enum MembershipStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+  BANNED
+}
+
+enum NotificationType {
+  PRAYER_REQUEST
+  PRAYER_RESPONSE
+  FORUM_POST
+  FORUM_COMMENT
+  GROUP_INVITATION
+  GROUP_UPDATE
+  SYSTEM
+}
+
+enum ReportStatus {
+  PENDING
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
